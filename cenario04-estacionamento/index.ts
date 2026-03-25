@@ -76,12 +76,29 @@ function registrarEntrada(dados: IRegistrarEntrada): IResultadoEntrada {
     // 4. Adicionar o ticket ao array tickets
     // 5. Incrementar vagas.ocupadas
 
-    return {
-        ticket: null,
-        ehValido: false,
-        mensagem: ''
+    const veiculo = veiculosCadastrados.find(v => v.placa === dados.placa)
+    if (!veiculo) {
+        return { ticket: null, ehValido: false, mensagem: 'Veículo não cadastrado.' }
     }
+
+
+    if (vagas.ocupadas >= vagas.total) {
+        return { ticket: null, ehValido: false, mensagem: 'Estacionamento lotado.' }
+    }
+
+    const ticket: ITicket = {
+        id: proximoTicketId++,
+        placa: dados.placa,
+        entrada: new Date(),
+        saida: null
+    }
+
+    tickets.push(ticket)
+    vagas.ocupadas++
+
+    return { ticket, ehValido: true, mensagem: 'Entrada registrada com sucesso.' }
 }
+
 
 function registrarSaida(dados: IRegistrarSaida): IResultadoSaida {
     // TODO: Implementar a lógica seguindo as regras de negócio
@@ -98,11 +115,49 @@ function registrarSaida(dados: IRegistrarSaida): IResultadoSaida {
     // 9. Se valor > R$ 50,00, aplicar teto da diária (R$ 50,00)
     // 10. Registrar a saída no ticket e decrementar vagas.ocupadas
 
-    return {
-        valor: 0,
-        ehValido: false,
-        mensagem: ''
+    const ticket = tickets.find(t => t.id === dados.ticketId)
+    if (!ticket) {
+        return { valor: 0, ehValido: false, mensagem: 'Ticket não encontrado.' }
     }
+
+    if (dados.perdeuTicket) {
+        ticket.saida = new Date()
+        vagas.ocupadas--
+        return { valor: 80, ehValido: true, mensagem: 'Ticket perdido. Multa de R$ 80,00.' }
+    }
+
+    const veiculo = veiculosCadastrados.find(v => v.placa === ticket.placa)
+    if (veiculo?.tipo === 'mensalista') {
+        ticket.saida = new Date()
+        vagas.ocupadas--
+        return { valor: 0, ehValido: true, mensagem: 'Mensalista. Saída liberada.' }
+    }
+
+    const agora = new Date()
+    const minutos = Math.ceil((agora.getTime() - ticket.entrada.getTime()) / 60000)
+
+    let valor = 0
+    if (minutos <= 15) {
+        valor = 0
+
+
+    } else if (minutos <= 60) {
+        valor = 10
+
+
+    } else {
+        const minutosAdicionais = minutos - 60
+        const horasAdicionais = Math.ceil(minutosAdicionais / 60)
+        valor = 10 + horasAdicionais * 5
+    }
+
+
+    if (valor > 50) valor = 50
+
+    ticket.saida = agora
+    vagas.ocupadas--
+
+    return { valor, ehValido: true, mensagem: `Valor a pagar: R$ ${valor},00` }
 }
 
 // ==================== TESTES ====================
